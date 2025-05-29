@@ -31,3 +31,5 @@ const sharedDocumentSchema = new Schema({
 const SharedDocument = mongoose.model('SharedDocument', sharedDocumentSchema);
 
 module.exports = SharedDocument;
+
+module.exports = SharedDocument;
