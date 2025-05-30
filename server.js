@@ -10,6 +10,9 @@ const { Server } = require('socket.io');
 const connectDB = require('./src/config/database');
 const socketConfig = require('./src/config/socket');
 
+// Importar serviços
+const healthService = require('./src/services/healthService');
+
 // Importar rotas
 const authRoutes = require('./src/routes/auth');
 const documentRoutes = require('./src/routes/documents');
@@ -65,9 +68,27 @@ app.use('/api/documents', documentRoutes);
 app.use('/api/share', shareRoutes);
 app.use('/api/users', userRoutes);
 
-// Rota de saúde/status
+// Rotas de health check
 app.get('/health', (req, res) => {
-  res.status(200).json({ status: 'ok', timestamp: new Date().toISOString() });
+  res.status(200).json({ 
+    status: 'ok', 
+    timestamp: new Date().toISOString(),
+    service: 'document-api'
+  });
+});
+
+app.get('/health/details', async (req, res) => {
+  try {
+    const healthData = await healthService.checkHealth();
+    res.status(200).json(healthData);
+  } catch (error) {
+    console.error('Erro ao verificar saúde do sistema:', error);
+    res.status(500).json({ 
+      status: 'error', 
+      message: 'Erro ao verificar saúde do sistema',
+      error: error.message
+    });
+  }
 });
 
 // Tratamento de erro para rotas não encontradas

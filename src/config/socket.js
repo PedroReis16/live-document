@@ -1,6 +1,10 @@
 const { verifyAccessToken } = require('../utils/jwt');
 const DocumentService = require('../services/documentService');
 const documentService = require('../services/documentService');
+const healthService = require('../services/healthService');
+
+// Contador global de conexões
+let connectionsCount = 0;
 
 const socketEvents = {
   // Eventos de documento
@@ -145,7 +149,9 @@ const configureSocket = (io) => {
   });
 
   io.on('connection', (socket) => {
-    console.log(`Novo cliente conectado: ${socket.id}`);
+    connectionsCount++;
+    healthService.constructor.updateSocketConnections(connectionsCount);
+    console.log(`Novo cliente conectado: ${socket.id}, Total: ${connectionsCount}`);
     
     // Registra eventos para este socket
     socket.on('join-document', socketEvents['join-document'](socket, io));
@@ -155,7 +161,9 @@ const configureSocket = (io) => {
     socket.on('cursor-position', socketEvents['cursor-position'](socket, io));
     
     socket.on('disconnect', () => {
-      console.log(`Cliente desconectado: ${socket.userData?.username || socket.id}`);
+      connectionsCount--;
+      healthService.constructor.updateSocketConnections(connectionsCount);
+      console.log(`Cliente desconectado: ${socket.userData?.username || socket.id}, Total: ${connectionsCount}`);
     });
   });
 };
