@@ -9,6 +9,7 @@ const { Server } = require('socket.io');
 // Importar configurações
 const connectDB = require('./src/config/database');
 const socketConfig = require('./src/config/socket');
+const { swaggerUi, specs } = require('./src/config/swagger');
 
 // Importar serviços
 const healthService = require('./src/services/healthService');
@@ -42,7 +43,15 @@ documentService.setSocketIO(io);
 socketConfig(io);
 
 // Middleware
-app.use(helmet());
+app.use(helmet({
+  contentSecurityPolicy: {
+    directives: {
+      ...helmet.contentSecurityPolicy.getDefaultDirectives(),
+      'img-src': ["'self'", 'data:', 'blob:'],
+      'script-src': ["'self'", "'unsafe-inline'", "'unsafe-eval'"] // Para o Swagger UI funcionar
+    }
+  }
+}));
 app.use(cors({
   origin: process.env.CLIENT_URL || '*',
   methods: ['GET', 'POST', 'PUT', 'DELETE'],
@@ -50,6 +59,9 @@ app.use(cors({
 }));
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
+
+// Configuração do Swagger
+app.use('/api-docs', swaggerUi.serve, swaggerUi.setup(specs, { explorer: true }));
 
 // Rate limiting
 const apiLimiter = rateLimit({
@@ -107,4 +119,5 @@ const PORT = process.env.PORT || 5000;
 
 httpServer.listen(PORT, () => {
   console.log(`Servidor rodando na porta ${PORT}`);
+  console.log(`Documentação Swagger disponível em http://localhost:${PORT}/api-docs`);
 });
