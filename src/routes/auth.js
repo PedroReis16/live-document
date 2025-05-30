@@ -69,7 +69,7 @@ const authController = new AuthController();
  *               - email
  *               - password
  *             properties:
- *               name:
+ *               username:
  *                 type: string
  *                 description: Nome completo do usuário
  *               email:

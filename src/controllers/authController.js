@@ -23,13 +23,13 @@ class AuthController {
       
       // Verificar se usuário ou email já existem
       const existingUser = await User.findOne({ 
-        $or: [{ username }, { email }]
+        $or: [ { email }]
       });
       
       if (existingUser) {
         return res.status(409).json({ 
           success: false, 
-          message: 'Usuário ou email já cadastrado' 
+          message: 'Email já cadastrado' 
         });
       }
       
