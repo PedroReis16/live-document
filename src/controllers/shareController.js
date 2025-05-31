@@ -1,7 +1,10 @@
 const Document = require('../models/Document');
 const SharedDocument = require('../models/SharedDocument');
+const ShareLink = require('../models/ShareLink');
 const User = require('../models/User');
 const shareService = require('../services/shareService');
+const crypto = require('crypto');
+const ms = require('ms');
 
 class ShareController {
   /**
@@ -190,6 +193,214 @@ class ShareController {
       return res.status(500).json({
         success: false,
         message: 'Erro ao atualizar permissão'
+      });
+    }
+  }
+  
+  /**
+   * Gera um link compartilhável para o documento
+   * @route POST /api/share/document/:id/generate-link
+   */
+  async generateShareLink(req, res) {
+    try {
+      const { id } = req.params;
+      const { permission = 'read', expiresIn = '7d' } = req.body;
+      const userId = req.user.id;
+      
+      // Validar permissão
+      const validPermissions = ['read', 'write', 'admin'];
+      if (!validPermissions.includes(permission)) {
+        return res.status(400).json({
+          success: false,
+          message: 'Permissão inválida. Use: read, write ou admin'
+        });
+      }
+      
+      // Verificar se o documento existe
+      const document = await Document.findById(id);
+      if (!document) {
+        return res.status(404).json({
+          success: false,
+          message: 'Documento não encontrado'
+        });
+      }
+      
+      // Verificar se o usuário pode compartilhar o documento
+      if (document.ownerId.toString() !== userId) {
+        // Se não for o dono, verificar se tem permissão adequada
+        const share = await SharedDocument.findOne({
+          documentId: id,
+          sharedWithId: userId,
+          permissions: { $in: ['write', 'admin'] }
+        });
+        
+        if (!share) {
+          return res.status(403).json({
+            success: false,
+            message: 'Você não tem permissão para compartilhar este documento'
+          });
+        }
+      }
+      
+      // Gerar token único
+      const shareToken = crypto.randomBytes(16).toString('hex');
+      
+      // Calcular data de expiração baseada no parâmetro expiresIn
+      const expiresAt = new Date(Date.now() + ms(expiresIn));
+      
+      // Salvar no banco de dados
+      const shareLink = await ShareLink.create({
+        documentId: id,
+        shareToken,
+        createdBy: userId,
+        permission,
+        expiresAt
+      });
+      
+      // Construir URL completa para compartilhamento
+      // URL base deve ser obtida da configuração do ambiente
+      const baseUrl = process.env.FRONTEND_URL || 'https://document-app.com';
+      const shareUrl = `${baseUrl}/share/${shareToken}`;
+      
+      return res.status(200).json({
+        success: true,
+        shareToken,
+        shareUrl,
+        permission,
+        expiresAt: shareLink.expiresAt
+      });
+    } catch (error) {
+      console.error('Erro ao gerar link de compartilhamento:', error);
+      return res.status(500).json({
+        success: false,
+        message: 'Erro ao gerar link de compartilhamento'
+      });
+    }
+  }
+  
+  /**
+   * Obtém informações de um documento através do token de compartilhamento
+   * @route GET /api/share/link/:token
+   */
+  async getDocumentByToken(req, res) {
+    try {
+      const { token } = req.params;
+      
+      // Buscar link no banco de dados
+      const shareLink = await ShareLink.findOne({
+        shareToken: token,
+        expiresAt: { $gt: new Date() }
+      }).populate('documentId');
+      
+      // Verificar se o link existe e é válido
+      if (!shareLink) {
+        return res.status(404).json({
+          success: false,
+          message: 'Link de compartilhamento inválido ou expirado'
+        });
+      }
+      
+      // Incrementar contador de acesso
+      shareLink.accessCount += 1;
+      
+      // Se o usuário estiver autenticado, registrar seu acesso
+      if (req.user) {
+        if (!shareLink.accessedBy.includes(req.user.id)) {
+          shareLink.accessedBy.push(req.user.id);
+        }
+      }
+      
+      // Salvar alterações
+      await shareLink.save();
+      
+      // Retornar informações do documento
+      return res.status(200).json({
+        success: true,
+        documentId: shareLink.documentId._id,
+        title: shareLink.documentId.title,
+        permission: shareLink.permission
+      });
+    } catch (error) {
+      console.error('Erro ao acessar documento por token:', error);
+      return res.status(500).json({
+        success: false,
+        message: 'Erro ao processar link de compartilhamento'
+      });
+    }
+  }
+  
+  /**
+   * Entra em um documento através de token de compartilhamento
+   * @route POST /api/share/join-by-token
+   */
+  async joinByShareToken(req, res) {
+    try {
+      const { shareToken } = req.body;
+      const userId = req.user.id;
+      
+      if (!shareToken) {
+        return res.status(400).json({
+          success: false,
+          message: 'Token não fornecido'
+        });
+      }
+      
+      // Buscar link no banco de dados
+      const shareLink = await ShareLink.findOne({
+        shareToken,
+        expiresAt: { $gt: new Date() }
+      });
+      
+      // Verificar se o link existe e é válido
+      if (!shareLink) {
+        return res.status(404).json({
+          success: false,
+          message: 'Link de compartilhamento inválido ou expirado'
+        });
+      }
+      
+      // Verificar se já existe um compartilhamento para este usuário
+      let share = await SharedDocument.findOne({
+        documentId: shareLink.documentId,
+        sharedWithId: userId
+      });
+      
+      if (!share) {
+        // Criar novo compartilhamento
+        share = await SharedDocument.create({
+          documentId: shareLink.documentId,
+          sharedById: shareLink.createdBy,
+          sharedWithId: userId,
+          permissions: shareLink.permission
+        });
+      } else {
+        // Atualizar permissão se a nova for superior
+        const permissionLevels = { 'read': 1, 'write': 2, 'admin': 3 };
+        if (permissionLevels[shareLink.permission] > permissionLevels[share.permissions]) {
+          share.permissions = shareLink.permission;
+          await share.save();
+        }
+      }
+      
+      // Registrar este usuário no link de compartilhamento
+      if (!shareLink.accessedBy.includes(userId)) {
+        shareLink.accessedBy.push(userId);
+        shareLink.accessCount += 1;
+        await shareLink.save();
+      }
+      
+      // Retornar ID do documento para navegação
+      return res.status(200).json({
+        success: true,
+        documentId: shareLink.documentId,
+        permission: share.permissions,
+        message: 'Acesso concedido ao documento'
+      });
+    } catch (error) {
+      console.error('Erro ao entrar no documento via token:', error);
+      return res.status(500).json({
+        success: false,
+        message: 'Erro ao processar token de compartilhamento'
       });
     }
   }
