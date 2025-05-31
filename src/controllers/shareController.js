@@ -404,6 +404,274 @@ class ShareController {
       });
     }
   }
+  
+  /**
+   * Obtém a lista de colaboradores de um documento
+   * @route GET /api/share/:documentId/collaborators
+   */
+  async getCollaborators(req, res) {
+    try {
+      const { documentId } = req.params;
+      const userId = req.user.id;
+      
+      // Verificar se o documento existe
+      const document = await Document.findById(documentId);
+      
+      if (!document) {
+        return res.status(404).json({
+          success: false,
+          message: 'Documento não encontrado'
+        });
+      }
+      
+      // Verificar se o usuário tem acesso ao documento
+      const isOwner = document.ownerId.toString() === userId;
+      
+      // Se não for proprietário, verificar se é colaborador
+      if (!isOwner) {
+        const hasAccess = await SharedDocument.findOne({
+          documentId,
+          sharedWithId: userId
+        });
+        
+        if (!hasAccess) {
+          return res.status(403).json({
+            success: false,
+            message: 'Você não tem permissão para ver os colaboradores deste documento'
+          });
+        }
+      }
+      
+      // Buscar o proprietário do documento
+      const owner = await User.findById(document.ownerId)
+        .select('_id name email username avatar');
+      
+      // Lista de colaboradores começando com o proprietário
+      const collaborators = [{
+        id: owner._id,
+        name: owner.username || owner.name,
+        email: owner.email,
+        avatar: owner.avatar,
+        role: 'owner',
+        permission: 'admin',
+        status: 'offline' // Status será atualizado pelo Socket.io se estiver online
+      }];
+      
+      // Buscar compartilhamentos deste documento
+      const shares = await SharedDocument.find({ documentId })
+        .populate('sharedWithId', '_id name email username avatar');
+      
+      // Adicionar colaboradores à lista
+      for (const share of shares) {
+        if (share.sharedWithId) {
+          collaborators.push({
+            id: share.sharedWithId._id,
+            name: share.sharedWithId.username || share.sharedWithId.name,
+            email: share.sharedWithId.email,
+            avatar: share.sharedWithId.avatar,
+            role: 'collaborator',
+            permission: share.permissions,
+            status: 'offline' // Status será atualizado pelo Socket.io se estiver online
+          });
+        }
+      }
+      
+      return res.status(200).json({
+        success: true,
+        data: collaborators
+      });
+    } catch (error) {
+      console.error('Erro ao buscar colaboradores:', error);
+      return res.status(500).json({
+        success: false,
+        message: 'Erro ao buscar colaboradores'
+      });
+    }
+  }
+  
+  /**
+   * Atualiza a permissão de um colaborador
+   * @route PUT /api/share/:documentId/collaborators/:userId
+   */
+  async updateCollaboratorPermission(req, res) {
+    try {
+      const { documentId, userId } = req.params;
+      const { permission } = req.body;
+      const requestingUserId = req.user.id;
+      
+      // Verificar se o documento existe
+      const document = await Document.findById(documentId);
+      
+      if (!document) {
+        return res.status(404).json({
+          success: false,
+          message: 'Documento não encontrado'
+        });
+      }
+      
+      // Verificar se o usuário solicitante é o proprietário
+      const isOwner = document.ownerId.toString() === requestingUserId;
+      
+      if (!isOwner) {
+        // Se não for proprietário, verificar se tem permissão de administrador
+        const userShare = await SharedDocument.findOne({
+          documentId,
+          sharedWithId: requestingUserId,
+          permissions: 'admin'
+        });
+        
+        if (!userShare) {
+          return res.status(403).json({
+            success: false,
+            message: 'Você não tem permissão para gerenciar colaboradores deste documento'
+          });
+        }
+      }
+      
+      // Validar a permissão
+      const validPermissions = ['read', 'write', 'admin'];
+      if (!validPermissions.includes(permission)) {
+        return res.status(400).json({
+          success: false,
+          message: 'Permissão inválida. Use: read, write ou admin'
+        });
+      }
+      
+      // Verificar se o usuário alvo é o proprietário (não pode alterar)
+      if (document.ownerId.toString() === userId) {
+        return res.status(400).json({
+          success: false,
+          message: 'Não é possível alterar as permissões do proprietário do documento'
+        });
+      }
+      
+      // Buscar e atualizar o compartilhamento
+      const share = await SharedDocument.findOne({
+        documentId,
+        sharedWithId: userId
+      });
+      
+      if (!share) {
+        return res.status(404).json({
+          success: false,
+          message: 'Colaborador não encontrado'
+        });
+      }
+      
+      // Atualizar a permissão
+      share.permissions = permission;
+      await share.save();
+      
+      // Buscar dados do usuário para a resposta
+      const collaborator = await User.findById(userId)
+        .select('_id name email username avatar');
+      
+      return res.status(200).json({
+        success: true,
+        message: 'Permissão atualizada com sucesso',
+        data: {
+          id: collaborator._id,
+          name: collaborator.username || collaborator.name,
+          email: collaborator.email,
+          avatar: collaborator.avatar,
+          role: 'collaborator',
+          permission: share.permissions
+        }
+      });
+    } catch (error) {
+      console.error('Erro ao atualizar permissão de colaborador:', error);
+      return res.status(500).json({
+        success: false,
+        message: 'Erro ao atualizar permissão de colaborador'
+      });
+    }
+  }
+  
+  /**
+   * Remove um colaborador de um documento
+   * @route DELETE /api/share/:documentId/collaborators/:userId
+   */
+  async removeCollaborator(req, res) {
+    try {
+      const { documentId, userId } = req.params;
+      const requestingUserId = req.user.id;
+      
+      // Verificar se o documento existe
+      const document = await Document.findById(documentId);
+      
+      if (!document) {
+        return res.status(404).json({
+          success: false,
+          message: 'Documento não encontrado'
+        });
+      }
+      
+      // Verificar se o usuário solicitante é o proprietário
+      const isOwner = document.ownerId.toString() === requestingUserId;
+      
+      if (!isOwner) {
+        // Se não for proprietário, verificar se tem permissão de administrador
+        const userShare = await SharedDocument.findOne({
+          documentId,
+          sharedWithId: requestingUserId,
+          permissions: 'admin'
+        });
+        
+        if (!userShare) {
+          return res.status(403).json({
+            success: false,
+            message: 'Você não tem permissão para gerenciar colaboradores deste documento'
+          });
+        }
+      }
+      
+      // Verificar se o usuário alvo é o proprietário (não pode remover)
+      if (document.ownerId.toString() === userId) {
+        return res.status(400).json({
+          success: false,
+          message: 'Não é possível remover o proprietário do documento'
+        });
+      }
+      
+      // Buscar o compartilhamento para garantir que o colaborador existe
+      const share = await SharedDocument.findOne({
+        documentId,
+        sharedWithId: userId
+      });
+      
+      if (!share) {
+        return res.status(404).json({
+          success: false,
+          message: 'Colaborador não encontrado'
+        });
+      }
+      
+      // Remover o colaborador da lista de colaboradores do documento
+      document.collaborators = document.collaborators.filter(
+        id => id.toString() !== userId
+      );
+      
+      // Salvar o documento atualizado
+      await document.save();
+      
+      // Remover o compartilhamento
+      await SharedDocument.findOneAndDelete({
+        documentId,
+        sharedWithId: userId
+      });
+      
+      return res.status(200).json({
+        success: true,
+        message: 'Colaborador removido com sucesso'
+      });
+    } catch (error) {
+      console.error('Erro ao remover colaborador:', error);
+      return res.status(500).json({
+        success: false,
+        message: 'Erro ao remover colaborador'
+      });
+    }
+  }
 }
 
 module.exports = ShareController;
