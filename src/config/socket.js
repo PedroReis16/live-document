@@ -126,14 +126,32 @@ const socketEvents = {
       console.log(
         `Mudanças no documento ${documentId} por ${
           userData.username || "anônimo"
-        }`
+        }:`,
+        JSON.stringify(changes)
       );
+
+      // Verificar se a sala existe
+      const room = io.sockets.adapter.rooms.get(documentId);
+      if (!room) {
+        console.log(
+          `Sala ${documentId} não existe. Nenhum cliente vai receber as alterações.`
+        );
+
+        // Tentar reconectar o cliente à sala
+        socket.join(documentId);
+        console.log(`Cliente ${socket.id} reconectado à sala ${documentId}`);
+      } else {
+        console.log(
+          `Enviando alterações para ${room.size} cliente(s) na sala ${documentId}`
+        );
+      }
 
       // Broadcast para todos na sala exceto o emissor
       socket.to(documentId).emit("document-change", {
         changes,
         userId: userData.id,
         username: userData.username,
+        documentId, // Adicionar o ID do documento explicitamente para facilitar verificação no cliente
         timestamp: new Date(),
       });
 
