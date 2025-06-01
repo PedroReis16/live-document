@@ -75,13 +75,13 @@ class ShareController {
       }
 
       // Verificar se o usuário é dono do documento
-      if (document.ownerId.toString() !== userId) {
-        return res.status(403).json({
-          success: false,
-          message:
-            "Você não tem permissão para ver os compartilhamentos deste documento",
-        });
-      }
+      // if (document.ownerId.toString() !== userId) {
+      //   return res.status(403).json({
+      //     success: false,
+      //     message:
+      //       "Você não tem permissão para ver os compartilhamentos deste documento",
+      //   });
+      // }
 
       // Buscar todos os compartilhamentos deste documento
       const shares = await SharedDocument.find({ documentId }).populate(
@@ -377,6 +377,21 @@ class ShareController {
           sharedWithId: userId,
           permissions: shareLink.permission,
         });
+
+        // Buscar o documento para atualizar a lista de colaboradores
+        const document = await Document.findById(shareLink.documentId);
+
+        if (document) {
+          // Verificar se o usuário já está na lista de colaboradores
+          if (!document.collaborators.includes(userId)) {
+            // Adicionar o usuário à lista de colaboradores
+            document.collaborators.push(userId);
+            // Marcar o documento como compartilhado
+            document.isShared = true;
+            // Salvar as alterações no documento
+            await document.save();
+          }
+        }
       } else {
         // Atualizar permissão se a nova for superior
         const permissionLevels = { read: 1, write: 2, admin: 3 };
@@ -433,14 +448,34 @@ class ShareController {
 
       // Verificar se o usuário tem acesso ao documento
       const isOwner = document.ownerId.toString() === userId;
+      let hasAccess = isOwner;
 
-      // Se não for proprietário, verificar se é colaborador
+      // Se não for proprietário, verificar se é colaborador ou se tem acesso por qualquer outro meio
       if (!isOwner) {
-        const hasAccess = await SharedDocument.findOne({
+        // Verificar se é um colaborador por compartilhamento explícito
+        const shareRecord = await SharedDocument.findOne({
           documentId,
           sharedWithId: userId,
         });
 
+        if (shareRecord) {
+          hasAccess = true;
+        } else {
+          // Verificar se o documento está marcado como compartilhado publicamente
+          hasAccess = document.isShared;
+        }
+
+        // Se ainda não tem acesso, verificar se existem links de compartilhamento válidos
+        if (!hasAccess) {
+          const shareLink = await ShareLink.findOne({
+            documentId,
+            expiresAt: { $gt: new Date() },
+          });
+
+          hasAccess = !!shareLink;
+        }
+
+        // Se mesmo assim não tem acesso, negar
         if (!hasAccess) {
           return res.status(403).json({
             success: false,
