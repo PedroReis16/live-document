@@ -23,30 +23,56 @@ const socketEvents = {
           return;
         }
       } else {
-        console.log(`Conexão anônima ${socket.id} entrou no documento ${documentId}`);
+        // Usuário anônimo
+        socket.userData = { id: socket.id, username: 'Anônimo' };
+        console.log(`Usuário anônimo (${socket.id}) entrou no documento ${documentId}`);
       }
 
-      // Juntar-se à sala do documento
+      // Unir o socket à sala do documento
       socket.join(documentId);
+
+      // Buscar o documento do banco de dados para verificar permissões
+      const document = await DocumentService.getDocumentById(documentId);
       
-      // Notificar outros usuários
-      const userData = socket.userData || { id: socket.id };
-      socket.to(documentId).emit('user-connected', {
-        socketId: socket.id,
-        userId: userData.id,
-        username: userData.username,
-        timestamp: new Date()
+      if (!document) {
+        console.log(`Documento ${documentId} não encontrado`);
+        socket.emit('error', { message: 'Documento não encontrado' });
+        socket.leave(documentId);
+        return;
+      }
+
+      // Garantir que o ID seja consistente
+      const normalizedDocument = {
+        ...document.toObject(),
+        id: document._id.toString()
+      };
+      
+      // Lista de usuários conectados a este documento
+      const room = io.sockets.adapter.rooms.get(documentId);
+      const connectedClients = room ? Array.from(room) : [];
+      
+      // Informar ao cliente que entrou com sucesso
+      socket.emit('connected-users', {
+        document: normalizedDocument,
+        users: connectedClients.map(clientId => {
+          const client = io.sockets.sockets.get(clientId);
+          return {
+            socketId: clientId,
+            userId: client?.userData?.id || clientId,
+            username: client?.userData?.username || 'Anônimo'
+          };
+        })
       });
       
-      // Enviar lista de usuários conectados
-      const roomSockets = await io.in(documentId).fetchSockets();
-      const connectedUsers = roomSockets.map(s => ({
-        socketId: s.id,
-        userId: s.userData?.id || s.id,
-        username: s.userData?.username || 'Anônimo'
-      }));
-      
-      socket.emit('connected-users', connectedUsers);
+      // Notificar outros usuários na sala
+      socket.to(documentId).emit('user-connected', {
+        user: {
+          socketId: socket.id,
+          id: socket.userData.id,
+          username: socket.userData.username
+        },
+        timestamp: new Date()
+      });
     } catch (error) {
       console.error(`Erro ao entrar no documento ${documentId}:`, error);
       socket.emit('error', { message: 'Erro ao entrar no documento' });
