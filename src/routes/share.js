@@ -472,4 +472,59 @@ router.put('/:documentId/collaborators/:userId', shareController.updateCollabora
  */
 router.delete('/:documentId/collaborators/:userId', shareController.removeCollaborator);
 
+/**
+ * @swagger
+ * /api/share/{documentId}/permission/{userId}:
+ *   get:
+ *     summary: Obtém a permissão de um usuário específico em um documento
+ *     tags: [Share]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: documentId
+ *         schema:
+ *           type: string
+ *         required: true
+ *         description: ID do documento
+ *       - in: path
+ *         name: userId
+ *         schema:
+ *           type: string
+ *         required: true
+ *         description: ID do usuário cuja permissão será consultada
+ *     responses:
+ *       200:
+ *         description: Permissão do usuário no documento
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 success:
+ *                   type: boolean
+ *                 data:
+ *                   type: object
+ *                   properties:
+ *                     permission:
+ *                       type: string
+ *                       enum: [owner, admin, write, read, none]
+ *                       description: Nível de permissão do usuário
+ *                     isOwner:
+ *                       type: boolean
+ *                       description: Se o usuário é o proprietário do documento
+ *                     isCollaborator:
+ *                       type: boolean
+ *                       description: Se o usuário é um colaborador do documento
+ *       401:
+ *         description: Não autorizado
+ *       403:
+ *         description: Sem permissão para ver esta informação
+ *       404:
+ *         description: Documento não encontrado
+ *       500:
+ *         description: Erro do servidor
+ */
+router.get('/:documentId/permission/:userId', shareController.getUserPermission);
+
 module.exports = router;

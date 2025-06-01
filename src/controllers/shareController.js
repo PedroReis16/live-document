@@ -689,6 +689,88 @@ class ShareController {
       });
     }
   }
+
+  /**
+   * Obtém a permissão de um usuário específico em um documento
+   * @route GET /api/share/:documentId/permission/:userId
+   */
+  async getUserPermission(req, res) {
+    try {
+      const { documentId, userId } = req.params;
+      const requestingUserId = req.user.id;
+
+      // Verificar se o documento existe
+      const document = await Document.findById(documentId);
+
+      if (!document) {
+        return res.status(404).json({
+          success: false,
+          message: "Documento não encontrado",
+        });
+      }
+
+      // Se o usuário solicitante estiver pedindo sua própria permissão
+      // ou se for o dono do documento, permitir a consulta
+      if (
+        requestingUserId === userId ||
+        document.ownerId.toString() === requestingUserId
+      ) {
+        // Verificar se o usuário é o dono do documento
+        if (document.ownerId.toString() === userId) {
+          return res.status(200).json({
+            success: true,
+            data: {
+              permission: "owner",
+              isOwner: true,
+            },
+          });
+        }
+
+        // Verificar se é um colaborador
+        const isCollaborator = document.collaborators.some(
+          (collaboratorId) => collaboratorId.toString() === userId
+        );
+
+        // Se for colaborador, buscar permissão específica
+        if (isCollaborator) {
+          const share = await SharedDocument.findOne({
+            documentId,
+            sharedWithId: userId,
+          });
+
+          if (share) {
+            return res.status(200).json({
+              success: true,
+              data: {
+                permission: share.permissions,
+                isCollaborator: true,
+              },
+            });
+          }
+        }
+
+        // Se não for owner nem colaborador, retornar 'read' ou 'none'
+        return res.status(200).json({
+          success: true,
+          data: {
+            permission: document.isShared ? "read" : "none",
+          },
+        });
+      }
+
+      // Se um usuário estiver tentando ver permissões de outro sem ser owner
+      return res.status(403).json({
+        success: false,
+        message: "Você não tem permissão para verificar esta informação",
+      });
+    } catch (error) {
+      console.error("Erro ao obter permissão do usuário:", error);
+      return res.status(500).json({
+        success: false,
+        message: "Erro ao obter permissão do usuário",
+      });
+    }
+  }
 }
 
 module.exports = ShareController;
