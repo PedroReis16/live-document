@@ -126,6 +126,28 @@ const validateShare = (req, res, next) => {
   next();
 };
 
+// Valida dados para join by token sem exigir email
+const validateShareToken = (req, res, next) => {
+  const { shareToken } = req.body;
+  const errors = [];
+  
+  // Validar token
+  if (!shareToken) {
+    errors.push('Token de compartilhamento é obrigatório');
+  }
+  
+  // Retornar erros ou seguir para o próximo middleware
+  if (errors.length > 0) {
+    return res.status(400).json({
+      success: false,
+      message: 'Erro de validação',
+      errors
+    });
+  }
+  
+  next();
+};
+
 // Valida dados de atualização de perfil
 const validateProfile = (req, res, next) => {
   const { username, email } = req.body;
@@ -197,6 +219,7 @@ module.exports = {
   validateLogin,
   validateDocument,
   validateShare,
+  validateShareToken,  // Exportando o novo middleware
   validateProfile,
   validatePasswordUpdate
 };
