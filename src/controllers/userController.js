@@ -73,11 +73,8 @@ class UserController {
     try {
       const userId = req.user.id;
       const { 
-        name, 
         username, 
         email, 
-        bio, 
-        preferences,
         profileImage
       } = req.body;
       
@@ -112,11 +109,8 @@ class UserController {
       
       // Atualizar perfil
       const updateData = {};
-      if (name) updateData.name = name;
       if (username) updateData.username = username;
       if (email) updateData.email = email;
-      if (bio !== undefined) updateData.bio = bio;
-      if (preferences) updateData.preferences = preferences;
       
       // Tratar a imagem de perfil - aceitar diretamente como string base64
       if (profileImage) {
