@@ -19,6 +19,7 @@ const userSchema = new Schema({
         required: true 
     },
     avatar: String,
+    profileImage: String, // Campo para armazenar imagem em base64 diretamente no MongoDB
     createdAt: { 
         type: Date, 
         default: Date.now 

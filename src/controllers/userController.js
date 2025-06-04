@@ -43,7 +43,7 @@ class UserController {
     try {
       const { username } = req.params;
       
-      const user = await User.findOne({ username }).select('username avatar createdAt');
+      const user = await User.findOne({ username }).select('username profileImage createdAt');
       
       if (!user) {
         return res.status(404).json({
@@ -72,7 +72,14 @@ class UserController {
   async updateProfile(req, res) {
     try {
       const userId = req.user.id;
-      const { username, email } = req.body;
+      const { 
+        name, 
+        username, 
+        email, 
+        bio, 
+        preferences,
+        profileImage
+      } = req.body;
       
       // Verificar se já existe outro usuário com este username ou email
       if (username) {
@@ -105,8 +112,19 @@ class UserController {
       
       // Atualizar perfil
       const updateData = {};
+      if (name) updateData.name = name;
       if (username) updateData.username = username;
       if (email) updateData.email = email;
+      if (bio !== undefined) updateData.bio = bio;
+      if (preferences) updateData.preferences = preferences;
+      
+      // Tratar a imagem de perfil - aceitar diretamente como string base64
+      if (profileImage) {
+        // Verificar se é uma string base64 válida
+        if (typeof profileImage === 'string' && profileImage.includes('base64')) {
+          updateData.profileImage = profileImage;
+        }
+      }
       
       const updatedUser = await User.findByIdAndUpdate(
         userId, 
@@ -199,16 +217,13 @@ class UserController {
         });
       }
       
-      // Upload do avatar para Cloudinary
-      const avatarUrl = await imageService.uploadImage(
-        req.file.path, 
-        { folder: 'live-document/avatars' }
-      );
+      // Converter imagem para base64 e salvar diretamente no MongoDB
+      const profileImageBase64 = await imageService.fileToBase64(req.file.path);
       
-      // Atualizar usuário com nova URL de avatar
+      // Atualizar usuário com a imagem em base64
       const updatedUser = await User.findByIdAndUpdate(
         userId,
-        { avatar: avatarUrl },
+        { profileImage: profileImageBase64 },
         { new: true }
       ).select('-password');
       
@@ -222,6 +237,34 @@ class UserController {
       return res.status(500).json({
         success: false,
         message: 'Erro ao atualizar avatar'
+      });
+    }
+  }
+  
+  /**
+   * Remove o avatar/imagem do perfil do usuário
+   * @route DELETE /api/users/me/avatar
+   */
+  async removeAvatar(req, res) {
+    try {
+      const userId = req.user.id;
+      
+      const updatedUser = await User.findByIdAndUpdate(
+        userId,
+        { profileImage: null },
+        { new: true }
+      ).select('-password');
+      
+      return res.status(200).json({
+        success: true,
+        data: updatedUser,
+        message: 'Imagem de perfil removida com sucesso'
+      });
+    } catch (error) {
+      console.error('Erro ao remover imagem de perfil:', error);
+      return res.status(500).json({
+        success: false,
+        message: 'Erro ao remover imagem de perfil'
       });
     }
   }
@@ -265,4 +308,4 @@ class UserController {
   }
 }
 
-module.exports = UserController;
+module.exports = new UserController();

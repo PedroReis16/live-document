@@ -1,12 +1,9 @@
 const express = require('express');
 const router = express.Router();
-const UserController = require('../controllers/userController');
+const userController = require('../controllers/userController');
 const authenticate = require('../middleware/auth');
 const { upload, handleUploadErrors } = require('../middleware/upload');
 const { validateProfile, validatePasswordUpdate } = require('../middleware/validation');
-
-// Instanciar o controlador
-const userController = new UserController();
 
 /**
  * @swagger
@@ -234,6 +231,33 @@ router.put('/me/password', validatePasswordUpdate, userController.updatePassword
  *         description: Erro do servidor
  */
 router.post('/me/avatar', upload.single('avatar'), handleUploadErrors, userController.updateAvatar);
+
+/**
+ * @swagger
+ * /api/users/me/avatar:
+ *   delete:
+ *     summary: Remove a imagem de perfil/avatar do usuário
+ *     tags: [Users]
+ *     security:
+ *       - bearerAuth: []
+ *     requestBody:
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             properties:
+ *               removeFromMongoDB:
+ *                 type: boolean
+ *                 description: Indica se deve remover a imagem do MongoDB (true) ou do Cloudinary (false)
+ *     responses:
+ *       200:
+ *         description: Imagem de perfil removida com sucesso
+ *       401:
+ *         description: Não autorizado
+ *       500:
+ *         description: Erro do servidor
+ */
+router.delete('/me/avatar', userController.removeAvatar);
 
 /**
  * @swagger
