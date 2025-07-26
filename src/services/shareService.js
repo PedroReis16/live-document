@@ -154,7 +154,8 @@ class ShareService {
    * @returns {String} - Código de compartilhamento
    */
   generateShareCode() {
-    return crypto.randomBytes(6).toString('hex');
+    // Gerar um código alfanumérico de 8 caracteres usando crypto
+    return crypto.randomBytes(4).toString('hex').toUpperCase();
   }
 }
 

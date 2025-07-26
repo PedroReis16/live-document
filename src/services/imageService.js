@@ -1,49 +1,79 @@
-const cloudinary = require('cloudinary').v2;
-const fs = require('fs');
-const path = require('path');
-
-// Configuração do Cloudinary a partir de variáveis de ambiente
-// Esta configuração também pode estar no arquivo de configuração do cloudinary
-cloudinary.config({
-  cloud_name: process.env.CLOUDINARY_CLOUD_NAME,
-  api_key: process.env.CLOUDINARY_API_KEY,
-  api_secret: process.env.CLOUDINARY_API_SECRET,
-  secure: true
-});
+const fs = require("fs");
+const path = require("path");
 
 /**
  * Serviço para manipulação de imagens
  */
 class ImageService {
   /**
-   * Faz o upload de uma imagem para o Cloudinary
+   * Converte uma imagem para Base64
    * @param {String} imagePath - Caminho local para o arquivo de imagem
-   * @param {Object} options - Opções adicionais para o upload (opcional)
-   * @returns {String} URL da imagem no Cloudinary
+   * @returns {String} String codificada em Base64 da imagem
    */
-  async uploadImage(imagePath, options = {}) {
+  async fileToBase64(imagePath) {
     try {
-      // Configurar opções padrão
-      const uploadOptions = {
-        folder: 'live-document/images',
-        resource_type: 'auto',
-        ...options
-      };
-      
-      // Fazer upload da imagem para o Cloudinary
-      const result = await cloudinary.uploader.upload(imagePath, uploadOptions);
-      
-      // Remover o arquivo local depois do upload
+      // Ler o arquivo como buffer binário
+      const fileBuffer = fs.readFileSync(imagePath);
+
+      // Determinar o tipo MIME do arquivo baseado na extensão
+      const mimeType = this.getMimeType(imagePath);
+
+      // Converter para string Base64
+      const base64String = fileBuffer.toString("base64");
+
+      // Formato esperado para Data URLs: data:[<mime type>][;base64],<data>
+      const dataUrl = `data:${mimeType};base64,${base64String}`;
+
+      // Remover o arquivo local depois da conversão
       this.removeLocalFile(imagePath);
-      
-      // Retornar a URL da imagem
-      return result.secure_url;
+
+      return dataUrl;
     } catch (error) {
-      console.error('Erro ao fazer upload de imagem:', error);
-      throw new Error('Erro ao fazer upload de imagem');
+      console.error("Erro ao converter imagem para base64:", error);
+      throw new Error("Erro ao processar imagem");
     }
   }
-  
+
+  /**
+   * Upload de uma imagem
+   * Esta função processa o arquivo e retorna a URL (neste caso, o base64)
+   * @param {String} imagePath - Caminho local para o arquivo de imagem
+   * @returns {String} URL da imagem (Base64 neste caso)
+   */
+  async uploadImage(imagePath) {
+    try {
+      // Como não estamos usando o Cloudinary, convertemos para base64
+      const imageBase64 = await this.fileToBase64(imagePath);
+      return imageBase64;
+    } catch (error) {
+      console.error("Erro ao fazer upload de imagem:", error);
+      throw new Error("Erro ao fazer upload de imagem");
+    }
+  }
+
+  /**
+   * Determina o tipo MIME com base na extensão do arquivo
+   * @param {String} filePath - Caminho do arquivo
+   * @returns {String} Tipo MIME
+   */
+  getMimeType(filePath) {
+    const extension = path.extname(filePath).toLowerCase();
+
+    switch (extension) {
+      case ".jpg":
+      case ".jpeg":
+        return "image/jpeg";
+      case ".png":
+        return "image/png";
+      case ".gif":
+        return "image/gif";
+      case ".webp":
+        return "image/webp";
+      default:
+        return "application/octet-stream";
+    }
+  }
+
   /**
    * Remove um arquivo local
    * @param {String} filePath - Caminho do arquivo a ser removido
@@ -52,49 +82,7 @@ class ImageService {
     try {
       fs.unlinkSync(filePath);
     } catch (error) {
-      console.error('Erro ao remover arquivo local:', error);
-    }
-  }
-  
-  /**
-   * Remove uma imagem do Cloudinary
-   * @param {String} imageUrl - URL da imagem
-   */
-  async deleteImage(imageUrl) {
-    try {
-      // Extrair o public_id da URL
-      const publicId = this.getPublicIdFromUrl(imageUrl);
-      
-      if (publicId) {
-        await cloudinary.uploader.destroy(publicId);
-        return true;
-      }
-      
-      return false;
-    } catch (error) {
-      console.error('Erro ao excluir imagem:', error);
-      return false;
-    }
-  }
-  
-  /**
-   * Extrai o public_id de uma URL do Cloudinary
-   * @param {String} url - URL da imagem
-   * @returns {String} public_id da imagem
-   */
-  getPublicIdFromUrl(url) {
-    try {
-      // Exemplo de URL: https://res.cloudinary.com/cloud-name/image/upload/v1234567890/folder/file.jpg
-      const urlParts = url.split('/');
-      const filename = urlParts[urlParts.length - 1];
-      const folderPath = urlParts[urlParts.length - 2];
-      
-      // O public_id geralmente é folder/filename sem a extensão
-      const filenameWithoutExt = filename.split('.')[0];
-      return `${folderPath}/${filenameWithoutExt}`;
-    } catch (error) {
-      console.error('Erro ao extrair public_id da URL:', error);
-      return null;
+      console.error("Erro ao remover arquivo local:", error);
     }
   }
 }

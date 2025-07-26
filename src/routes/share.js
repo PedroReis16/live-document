@@ -2,7 +2,7 @@ const express = require('express');
 const router = express.Router();
 const authenticate = require('../middleware/auth');
 const ShareController = require('../controllers/shareController');
-const { validateShare } = require('../middleware/validation');
+const { validateShare, validateShareToken } = require('../middleware/validation');
 
 // Instanciar o controlador
 const shareController = new ShareController();
@@ -49,6 +49,107 @@ router.use(authenticate);
  *         permissions: "read"
  *         createdAt: "2023-05-30T18:51:12.456Z"
  */
+
+/**
+ * @swagger
+ * /api/share/join-by-token:
+ *   post:
+ *     summary: Entra em um documento através de um token de compartilhamento
+ *     tags: [Share]
+ *     security:
+ *       - bearerAuth: []
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required:
+ *               - shareToken
+ *             properties:
+ *               shareToken:
+ *                 type: string
+ *                 description: Token de compartilhamento obtido via link ou QRCode
+ *     responses:
+ *       200:
+ *         description: Acesso concedido ao documento
+ *       400:
+ *         description: Dados inválidos
+ *       401:
+ *         description: Não autorizado
+ *       404:
+ *         description: Link inválido ou expirado
+ *       500:
+ *         description: Erro do servidor
+ */
+router.post('/join-by-token', validateShareToken, shareController.joinByShareToken);
+
+/**
+ * @swagger
+ * /api/share/document/{documentId}/generate-link:
+ *   post:
+ *     summary: Gera um link compartilhável para um documento
+ *     tags: [Share]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: documentId
+ *         schema:
+ *           type: string
+ *         required: true
+ *         description: ID do documento
+ *     requestBody:
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             properties:
+ *               permission:
+ *                 type: string
+ *                 enum: [read, write, admin]
+ *                 default: read
+ *                 description: Nível de permissão para o link
+ *               expiresIn:
+ *                 type: string
+ *                 default: "7d"
+ *                 description: Tempo de expiração do link (formato compatível com ms)
+ *     responses:
+ *       200:
+ *         description: Link gerado com sucesso
+ *       401:
+ *         description: Não autorizado
+ *       403:
+ *         description: Sem permissão para compartilhar este documento
+ *       404:
+ *         description: Documento não encontrado
+ *       500:
+ *         description: Erro do servidor
+ */
+router.post('/document/:id/generate-link', shareController.generateShareLink);
+
+/**
+ * @swagger
+ * /api/share/link/{token}:
+ *   get:
+ *     summary: Acessa um documento através de um link compartilhado
+ *     tags: [Share]
+ *     parameters:
+ *       - in: path
+ *         name: token
+ *         schema:
+ *           type: string
+ *         required: true
+ *         description: Token de compartilhamento
+ *     responses:
+ *       200:
+ *         description: Informações do documento associado ao link
+ *       404:
+ *         description: Link inválido ou expirado
+ *       500:
+ *         description: Erro do servidor
+ */
+router.get('/link/:token', shareController.getDocumentByToken);
 
 /**
  * @swagger
@@ -225,5 +326,205 @@ router.delete('/:documentId/:userId', shareController.removeShare);
  *         description: Erro do servidor
  */
 router.put('/:documentId/:userId', validateShare, shareController.updateSharePermission);
+
+/**
+ * @swagger
+ * /api/share/{documentId}/collaborators:
+ *   get:
+ *     summary: Obtém todos os colaboradores de um documento
+ *     tags: [Share]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: documentId
+ *         schema:
+ *           type: string
+ *         required: true
+ *         description: ID do documento
+ *     responses:
+ *       200:
+ *         description: Lista de colaboradores do documento
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: array
+ *               items:
+ *                 type: object
+ *                 properties:
+ *                   id:
+ *                     type: string
+ *                     description: ID do usuário
+ *                   name:
+ *                     type: string
+ *                     description: Nome do usuário
+ *                   email:
+ *                     type: string
+ *                     description: Email do usuário
+ *                   avatar:
+ *                     type: string
+ *                     description: URL do avatar do usuário
+ *                   role:
+ *                     type: string
+ *                     enum: [owner, collaborator]
+ *                     description: Papel do usuário no documento
+ *                   permission:
+ *                     type: string
+ *                     enum: [read, write, admin]
+ *                     description: Permissão do usuário no documento
+ *                   status:
+ *                     type: string
+ *                     enum: [online, offline]
+ *                     description: Status do usuário
+ *       401:
+ *         description: Não autorizado
+ *       403:
+ *         description: Sem permissão para ver os colaboradores deste documento
+ *       404:
+ *         description: Documento não encontrado
+ *       500:
+ *         description: Erro do servidor
+ */
+router.get('/:documentId/collaborators', shareController.getCollaborators);
+
+/**
+ * @swagger
+ * /api/share/{documentId}/collaborators/{userId}:
+ *   put:
+ *     summary: Atualiza a permissão de um colaborador
+ *     tags: [Share]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: documentId
+ *         schema:
+ *           type: string
+ *         required: true
+ *         description: ID do documento
+ *       - in: path
+ *         name: userId
+ *         schema:
+ *           type: string
+ *         required: true
+ *         description: ID do usuário colaborador
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required:
+ *               - permission
+ *             properties:
+ *               permission:
+ *                 type: string
+ *                 enum: [read, write, admin]
+ *                 description: Permissão a ser atribuída ao colaborador
+ *     responses:
+ *       200:
+ *         description: Permissão atualizada com sucesso
+ *       400:
+ *         description: Dados inválidos
+ *       401:
+ *         description: Não autorizado
+ *       403:
+ *         description: Sem permissão para gerenciar colaboradores deste documento
+ *       404:
+ *         description: Documento ou usuário não encontrado
+ *       500:
+ *         description: Erro do servidor
+ */
+router.put('/:documentId/collaborators/:userId', shareController.updateCollaboratorPermission);
+
+/**
+ * @swagger
+ * /api/share/{documentId}/collaborators/{userId}:
+ *   delete:
+ *     summary: Remove um colaborador do documento
+ *     tags: [Share]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: documentId
+ *         schema:
+ *           type: string
+ *         required: true
+ *         description: ID do documento
+ *       - in: path
+ *         name: userId
+ *         schema:
+ *           type: string
+ *         required: true
+ *         description: ID do usuário colaborador a ser removido
+ *     responses:
+ *       200:
+ *         description: Colaborador removido com sucesso
+ *       401:
+ *         description: Não autorizado
+ *       403:
+ *         description: Sem permissão para gerenciar colaboradores deste documento
+ *       404:
+ *         description: Documento ou usuário não encontrado
+ *       500:
+ *         description: Erro do servidor
+ */
+router.delete('/:documentId/collaborators/:userId', shareController.removeCollaborator);
+
+/**
+ * @swagger
+ * /api/share/{documentId}/permission/{userId}:
+ *   get:
+ *     summary: Obtém a permissão de um usuário específico em um documento
+ *     tags: [Share]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: documentId
+ *         schema:
+ *           type: string
+ *         required: true
+ *         description: ID do documento
+ *       - in: path
+ *         name: userId
+ *         schema:
+ *           type: string
+ *         required: true
+ *         description: ID do usuário cuja permissão será consultada
+ *     responses:
+ *       200:
+ *         description: Permissão do usuário no documento
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 success:
+ *                   type: boolean
+ *                 data:
+ *                   type: object
+ *                   properties:
+ *                     permission:
+ *                       type: string
+ *                       enum: [owner, admin, write, read, none]
+ *                       description: Nível de permissão do usuário
+ *                     isOwner:
+ *                       type: boolean
+ *                       description: Se o usuário é o proprietário do documento
+ *                     isCollaborator:
+ *                       type: boolean
+ *                       description: Se o usuário é um colaborador do documento
+ *       401:
+ *         description: Não autorizado
+ *       403:
+ *         description: Sem permissão para ver esta informação
+ *       404:
+ *         description: Documento não encontrado
+ *       500:
+ *         description: Erro do servidor
+ */
+router.get('/:documentId/permission/:userId', shareController.getUserPermission);
 
 module.exports = router;
