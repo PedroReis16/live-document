@@ -1,0 +1,115 @@
+import { StyleSheet } from "react-native";
+
+export const styles = StyleSheet.create({
+  container: {
+    flex: 1,
+    backgroundColor: "#fff",
+  },
+  centeredContainer: {
+    flex: 1,
+    justifyContent: "center",
+    alignItems: "center",
+    padding: 20,
+  },
+  loadingText: {
+    marginTop: 10,
+    fontSize: 16,
+    color: "#666",
+  },
+  errorText: {
+    marginTop: 10,
+    fontSize: 16,
+    color: "#ff0000",
+    textAlign: "center",
+    marginBottom: 20,
+  },
+  button: {
+    minWidth: 150,
+  },
+  headerButtons: {
+    flexDirection: "row",
+    marginRight: 10,
+  },
+  headerButton: {
+    marginHorizontal: 8,
+  },
+  collaboratorsContainer: {
+    flex: 1,
+    backgroundColor: "#fff",
+  },
+  collaboratorsHeader: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+    padding: 16,
+    borderBottomWidth: 1,
+    borderBottomColor: "#e0e0e0",
+  },
+  collaboratorsTitle: {
+    fontSize: 18,
+    fontWeight: "bold",
+  },
+  saveButton: {
+    position: "absolute",
+    bottom: 30,
+    right: 30,
+    width: 60,
+    height: 60,
+    borderRadius: 30,
+    backgroundColor: "#007bff",
+    justifyContent: "center",
+    alignItems: "center",
+    elevation: 4,
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.3,
+    shadowRadius: 3,
+  },
+  optionsArea: {
+    position: "absolute",
+    top: 20,
+    right: 20,
+    zIndex: 1000,
+  },
+  optionsButton: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    backgroundColor: "#f0f0f0",
+    justifyContent: "center",
+    alignItems: "center",
+    elevation: 2,
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.2,
+    shadowRadius: 2,
+  },
+  optionsMenu: {
+    position: "absolute",
+    top: 45,
+    right: 0,
+    width: 150,
+    backgroundColor: "#fff",
+    borderRadius: 8,
+    elevation: 4,
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 3 },
+    shadowOpacity: 0.3,
+    shadowRadius: 4,
+  },
+  optionItem: {
+    flexDirection: "row",
+    alignItems: "center",
+    padding: 12,
+    borderBottomWidth: 1,
+    borderBottomColor: "#e0e0e0",
+  },
+  optionIcon: {
+    marginRight: 10,
+  },
+  optionText: {
+    fontSize: 16,
+    color: "#333",
+  },
+});
+
